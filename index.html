@@ -421,6 +421,23 @@ function adminLogin() {
   }
 }
 
+  // Add this temporarily - call it once from browser console
+function createAdminAccount() {
+  firebase.auth().createUserWithEmailAndPassword(
+    "carlanviroberts@gmail.com",
+    "@Carlanvi321"
+  )
+  .then((userCredential) => {
+    console.log("Admin account created:", userCredential.user.email);
+    alert("Admin account created successfully!");
+  })
+  .catch((error) => {
+    console.error("Error creating account:", error);
+    alert("Error: " + error.message);
+  });
+}
+
+// Call this once from browser console: createAdminAccount()
   
   function listenForReservations() {
   db.collection("reservations").onSnapshot(snapshot => {
