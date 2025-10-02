@@ -562,11 +562,12 @@ function loadGallery() {
       categories[category].forEach(item => {
         categoryContainer.innerHTML += `
   <div class="product-slot" id="${item.docId}">
-    <img src="${item.imageUrl || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="Product">
+    <img id="preview-${item.docId}" src="${item.imageUrl || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="Product">
+    <input type="file" id="file-${item.docId}" accept="image/*" onchange="previewImage('${item.docId}')" 
+           style="margin-bottom:8px; padding:8px; border:1px solid #ccc; border-radius:6px;">
     <textarea id="name-${item.docId}" placeholder="Item Name" rows="2">${item.name}</textarea>
     <textarea id="desc-${item.docId}" placeholder="Item Description" rows="3">${item.description}</textarea>
     <input type="number" id="price-${item.docId}" value="${item.price}" placeholder="Price">
-    <input type="text" id="url-${item.docId}" value="${item.imageUrl}" placeholder="Image URL">
     <select id="category-${item.docId}">
       <option value="EVENT ITEMS" ${item.category==="EVENT ITEMS"?"selected":""}>EVENT ITEMS</option>
       <option value="THRILL RIDES" ${item.category==="THRILL RIDES"?"selected":""}>THRILL RIDES</option>
@@ -575,7 +576,7 @@ function loadGallery() {
     </select>
     <div class="card-buttons">
       <button class="delete-btn" onclick="removePhoto('${item.docId}')">🗑 Delete</button>
-      <button class="save-btn" onclick="updateProduct('${item.docId}')">💾 Save</button>
+      <button class="save-btn" onclick="updateProductWithUpload('${item.docId}')">💾 Save</button>
     </div>
   </div>
 `;
@@ -596,56 +597,92 @@ function loadGallery() {
     }
 
     function addNewSlot() {
-      const galleryContainer = document.getElementById("adminGallery");
-      const newId = "new-" + Date.now();
+  const galleryContainer = document.getElementById("adminGallery");
+  const newId = "new-" + Date.now();
 
-      galleryContainer.innerHTML += `
-        <div class="product-slot" id="${newId}">
-          <img src="" alt="Product">
-          <textarea id="name-${newId}" placeholder="Item Name" rows="2"></textarea>\n<textarea id="desc-${newId}" placeholder="Item Description" rows="3"></textarea>
-          <input type="number" id="price-${newId}" placeholder="Price">
-          <input type="text" id="url-${newId}" placeholder="Image URL">
-          <select id="category-${newId}">
-            <option value="EVENT ITEMS">EVENT ITEMS</option>
-          </select>
-          <div class="card-buttons">
-            <button class="delete-btn" onclick="document.getElementById('${newId}').remove()">🗑 Delete</button>
-            <button class="save-btn" onclick="saveNewProduct('${newId}')">💾 Save</button>
-          </div>
-        </div>
-      `;
+  galleryContainer.innerHTML += `
+    <div class="product-slot" id="${newId}">
+      <img id="preview-${newId}" src="https://via.placeholder.com/300x200?text=Upload+Image" alt="Product">
+      <input type="file" id="file-${newId}" accept="image/*" onchange="previewImage('${newId}')" 
+             style="margin-bottom:8px; padding:8px; border:1px solid #ccc; border-radius:6px;">
+      <textarea id="name-${newId}" placeholder="Item Name" rows="2"></textarea>
+      <textarea id="desc-${newId}" placeholder="Item Description" rows="3"></textarea>
+      <input type="number" id="price-${newId}" placeholder="Price">
+      <select id="category-${newId}">
+        <option value="EVENT ITEMS">EVENT ITEMS</option>
+        <option value="THRILL RIDES">THRILL RIDES</option>
+        <option value="CARS">CARS</option>
+        <option value="BATHROOM">BATHROOM</option>
+      </select>
+      <div class="card-buttons">
+        <button class="delete-btn" onclick="document.getElementById('${newId}').remove()">🗑 Delete</button>
+        <button class="save-btn" onclick="saveNewProductWithUpload('${newId}')">💾 Save</button>
+      </div>
+    </div>
+  `;
     }
-    
 
-function saveNewProduct(docId) {
+
+    function previewImage(docId) {
+  const fileInput = document.getElementById(`file-${docId}`);
+  const preview = document.getElementById(`preview-${docId}`);
+  
+  if (fileInput.files && fileInput.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.src = e.target.result;
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  }
+    }
+
+async function saveNewProductWithUpload(docId) {
   const name = document.getElementById(`name-${docId}`).value.trim();
   const description = document.getElementById(`desc-${docId}`).value.trim();
   const price = parseFloat(document.getElementById(`price-${docId}`).value) || 0;
-  const url = document.getElementById(`url-${docId}`).value.trim();
   const category = document.getElementById(`category-${docId}`).value;
+  const fileInput = document.getElementById(`file-${docId}`);
 
-  if (!name || !url || price <= 0) {
-    alert("Please enter a valid name, image URL, and price.");
+  if (!name || price <= 0) {
+    alert("Please enter a valid name and price.");
     return;
   }
 
-  db.collection("gallery").add({
-    name,
-    description,
-    price,
-    imageUrl: url,
-    category,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  })
-  .then(() => {
-    console.log("New product saved successfully");
-    // ❌ no need to manually remove temp slot
-    // Firestore snapshot will re-render gallery with new product
-  })
-  .catch(error => {
-    console.error("Error saving new product: ", error);
-    alert("Error saving new product: " + error.message);
-  });
+  if (!fileInput.files || !fileInput.files[0]) {
+    alert("Please select an image to upload.");
+    return;
+  }
+
+  try {
+    // Show uploading message
+    const saveBtn = document.querySelector(`#${docId} .save-btn`);
+    saveBtn.textContent = "Uploading...";
+    saveBtn.disabled = true;
+
+    // Upload image to Firebase Storage
+    const file = fileInput.files[0];
+    const storageRef = firebase.storage().ref();
+    const imageRef = storageRef.child(`gallery/${Date.now()}_${file.name}`);
+    
+    await imageRef.put(file);
+    const imageUrl = await imageRef.getDownloadURL();
+
+    // Save to Firestore
+    await db.collection("gallery").add({
+      name,
+      description,
+      price,
+      imageUrl: imageUrl,
+      category,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert("Product saved successfully!");
+    
+  } catch (error) {
+    console.error("Error saving product:", error);
+    alert("Error saving product: " + error.message);
+  }
 }
 
 
@@ -679,7 +716,46 @@ function saveNewProduct(docId) {
       });
     }
 
-     
+     async function updateProductWithUpload(docId) {
+  const name = document.getElementById(`name-${docId}`).value;
+  const description = document.getElementById(`desc-${docId}`).value;
+  const price = parseFloat(document.getElementById(`price-${docId}`).value) || 0;
+  const category = document.getElementById(`category-${docId}`).value;
+  const fileInput = document.getElementById(`file-${docId}`);
+
+  try {
+    let imageUrl = document.getElementById(`preview-${docId}`).src;
+
+    // If new image selected, upload it
+    if (fileInput.files && fileInput.files[0]) {
+      const saveBtn = document.querySelector(`#${docId} .save-btn`);
+      saveBtn.textContent = "Uploading...";
+      saveBtn.disabled = true;
+
+      const file = fileInput.files[0];
+      const storageRef = firebase.storage().ref();
+      const imageRef = storageRef.child(`gallery/${Date.now()}_${file.name}`);
+      
+      await imageRef.put(file);
+      imageUrl = await imageRef.getDownloadURL();
+    }
+
+    await db.collection("gallery").doc(docId).update({
+      name: name || "",
+      description: description || "",
+      price: price || 0,
+      imageUrl: imageUrl || "",
+      category: category || "UNCATEGORIZED",
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log("Product updated");
+    
+  } catch (error) {
+    console.error("Error updating product:", error);
+    alert("Error updating product: " + error.message);
+  }
+     }
 
 function loadReservations() {
   const reservationsContainer = document.getElementById('reservationsList');
