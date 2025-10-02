@@ -471,7 +471,8 @@
   appId: "1:90498107933:web:15d142b014c87ac30fd4f4"
 };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+const db = firebase.firestore();
+const storage = firebase.storage();
 
     function showSection(sectionId) {
       document.querySelectorAll('.content-section').forEach(section =>
@@ -662,7 +663,7 @@ async function saveNewProductWithUpload(docId) {
 
     // Upload image to Firebase Storage
     const file = fileInput.files[0];
-    const storageRef = firebase.storage().ref();
+    const storageRef = storage.ref();
     const imageRef = storageRef.child(`gallery/${Date.now()}_${file.name}`);
     
     await imageRef.put(file);
@@ -734,7 +735,7 @@ async function saveNewProductWithUpload(docId) {
       saveBtn.disabled = true;
 
       const file = fileInput.files[0];
-      const storageRef = firebase.storage().ref();
+      const storageRef = storage.ref();
       const imageRef = storageRef.child(`gallery/${Date.now()}_${file.name}`);
       
       await imageRef.put(file);
